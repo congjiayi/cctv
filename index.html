@@ -1,0 +1,1314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>闭路 · NIGHT SHIFT</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{width:100%;height:100%;background:#000;overflow:hidden;
+    font-family:'Courier New','Consolas',monospace;user-select:none;}
+
+  /* ---------- 启动 ---------- */
+  #boot{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 45%,#080b08 0%,#000 72%);
+    display:flex;align-items:center;justify-content:center;transition:opacity 1s;}
+  #boot.hide{opacity:0;pointer-events:none;}
+  .boot-inner{text-align:center;color:#5fae7c;}
+  .boot-inner h1{font-size:clamp(20px,3.6vw,38px);letter-spacing:.6em;font-weight:400;
+    margin-bottom:16px;text-shadow:0 0 22px rgba(80,255,140,.3);}
+  .boot-inner .sub{font-size:12px;letter-spacing:.35em;opacity:.5;margin-bottom:44px;}
+  #startBtn{background:transparent;border:1px solid #2f6b46;color:#7fe0a0;font-family:inherit;
+    font-size:14px;letter-spacing:.4em;padding:14px 46px;cursor:pointer;transition:all .25s;
+    text-shadow:0 0 8px rgba(80,255,140,.5);}
+  #startBtn:hover{background:rgba(60,200,120,.1);border-color:#4fbb7e;
+    box-shadow:0 0 30px rgba(60,200,120,.35),inset 0 0 18px rgba(60,200,120,.12);}
+  .boot-hint{margin-top:36px;font-size:11px;letter-spacing:.2em;opacity:.35;line-height:2.1;}
+
+  /* ---------- 监控舞台 ---------- */
+  #stage{position:fixed;inset:0;background:#000;display:none;}
+  #stage.on{display:block;}
+  #screen{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+    image-rendering:pixelated;filter:contrast(1.2) brightness(1.05) saturate(.55);}
+  #scan{position:absolute;inset:0;pointer-events:none;z-index:4;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.4) 0px,rgba(0,0,0,.4) 1px,transparent 1px,transparent 3px);}
+  #vignette{position:absolute;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at 50% 50%,rgba(70,130,85,.05) 0%,rgba(0,0,0,.82) 100%);}
+
+  /* HUD */
+  #hud-top{position:absolute;top:14px;left:20px;right:20px;z-index:6;display:flex;
+    justify-content:space-between;align-items:flex-start;pointer-events:none;
+    font-size:13px;letter-spacing:2px;color:#7fe0a0;text-shadow:0 0 8px rgba(80,255,140,.55);}
+  #hud-top .left,#hud-top .right{display:flex;gap:22px;align-items:center;}
+  #hud-top .room{color:#a8f0c0;}
+  #rec{color:#ff3b30;animation:blink 1.3s steps(1) infinite;}
+  @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:.12}}
+
+  /* 切换条 */
+  #cam-bar{position:absolute;bottom:0;left:0;right:0;z-index:7;display:flex;gap:6px;
+    padding:10px 14px 14px;justify-content:center;flex-wrap:wrap;
+    background:linear-gradient(to top,rgba(0,0,0,.9),transparent);}
+  .cam-btn{flex:0 0 auto;min-width:92px;padding:9px 10px 7px;background:rgba(10,20,12,.65);
+    border:1px solid #1e3a28;color:#5fae7c;font-family:inherit;font-size:11px;letter-spacing:1.5px;
+    cursor:pointer;transition:all .15s;text-align:center;line-height:1.5;}
+  .cam-btn .num{display:block;font-size:9px;opacity:.55;letter-spacing:2px;}
+  .cam-btn:hover{border-color:#3f8a5e;color:#8fe8b0;background:rgba(20,40,26,.8);}
+  .cam-btn.active{border-color:#5fbf85;color:#c6ffe0;background:rgba(30,70,44,.85);
+    box-shadow:0 0 16px rgba(80,220,140,.35),inset 0 0 12px rgba(80,220,140,.15);}
+
+  /* 抖动 / 闪白 */
+  .shake{animation:shake .42s linear;}
+  @keyframes shake{
+    0%,100%{transform:translate(0,0)}
+    12%{transform:translate(-9px,5px)}
+    26%{transform:translate(7px,-6px)}
+    42%{transform:translate(-6px,-4px)}
+    58%{transform:translate(5px,7px)}
+    76%{transform:translate(-4px,3px)}
+  }
+  #flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:60;
+    mix-blend-mode:screen;}
+
+  /* ---------- 日志层 ---------- */
+  #log-layer{position:fixed;inset:0;z-index:80;background:#000;display:none;
+    align-items:center;justify-content:center;padding:6vh 8vw;cursor:pointer;}
+  #log-layer.on{display:flex;}
+  #log-text{max-width:760px;width:100%;color:#8fe8b0;font-size:clamp(13px,1.55vw,17px);
+    line-height:2.15;letter-spacing:.12em;white-space:pre-wrap;
+    text-shadow:0 0 10px rgba(80,220,140,.25);}
+  #log-text .cursor{display:inline-block;width:.55em;height:1.05em;background:#8fe8b0;
+    vertical-align:-.15em;animation:blink 1s steps(1) infinite;margin-left:2px;}
+  #log-hint{position:absolute;bottom:5vh;right:8vw;font-size:13px;letter-spacing:.3em;
+    color:#7fe0a0;opacity:1;animation:blink 1.6s steps(1) infinite;
+    text-shadow:0 0 8px rgba(80,220,140,.5);}
+
+  /* ---------- 结局层 ---------- */
+  #end-layer{position:fixed;inset:0;z-index:90;background:#000;display:none;
+    align-items:center;justify-content:center;flex-direction:column;padding:8vh 8vw;text-align:center;}
+  #end-layer.on{display:flex;}
+  #end-title{font-size:clamp(18px,2.6vw,28px);letter-spacing:.5em;color:#8fe8b0;
+    margin-bottom:36px;text-shadow:0 0 24px rgba(80,220,140,.35);}
+  #end-text{max-width:680px;color:#6bbf8a;font-size:clamp(12px,1.45vw,16px);
+    line-height:2.2;letter-spacing:.14em;white-space:pre-wrap;margin-bottom:52px;}
+  #restartBtn{background:transparent;border:1px solid #2f6b46;color:#7fe0a0;font-family:inherit;
+    font-size:13px;letter-spacing:.35em;padding:12px 38px;cursor:pointer;transition:all .25s;}
+  #restartBtn:hover{background:rgba(60,200,120,.1);border-color:#4fbb7e;
+    box-shadow:0 0 24px rgba(60,200,120,.3);}
+</style>
+</head>
+<body>
+
+<!-- 启动 -->
+<div id="boot">
+  <div class="boot-inner">
+    <h1>闭 路</h1>
+    <div class="sub">CCTV-8 · 夜班监控 · 第 1 夜</div>
+    <button id="startBtn">开始值班</button>
+    <div class="boot-hint">8 路摄像头 · 键盘 1—8 切换画面<br>如果画面里出现了不该有的东西，别盯着看太久</div>
+  </div>
+</div>
+
+<!-- 监控舞台 -->
+<div id="stage">
+  <canvas id="screen" width="960" height="600"></canvas>
+  <div id="scan"></div>
+  <div id="vignette"></div>
+  <div id="hud-top">
+    <div class="left">
+      <span id="hud-cam">CAM 01</span>
+      <span class="room" id="hud-room">走廊 · 1F</span>
+    </div>
+    <div class="right">
+      <span id="hud-clock">00:00:00</span>
+      <span id="rec">● REC</span>
+    </div>
+  </div>
+  <div id="cam-bar"></div>
+</div>
+
+<!-- 日志 -->
+<div id="log-layer">
+  <div id="log-text"></div>
+  <div id="log-hint">[ 点击跳过 ]</div>
+</div>
+
+<!-- 结局 -->
+<div id="end-layer">
+  <div id="end-title"></div>
+  <div id="end-text"></div>
+  <button id="restartBtn">重新值班</button>
+</div>
+
+<div id="flash"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ===== 全局错误显示（方便排查） ===== */
+window.addEventListener('error', function(e){
+  console.error('[GAME ERROR]', e.message, 'line', e.lineno);
+});
+
+/* ============================================================
+   0. 基础常量 & 工具
+============================================================ */
+const W = 960, H = 600;
+const screenCv = document.getElementById('screen');
+const ctx = screenCv.getContext('2d');
+const stage = document.getElementById('stage');
+const flashEl = document.getElementById('flash');
+
+const clamp = (v,a,b)=>v<a?a:v>b?b:v;
+const rand = (a,b)=>a+Math.random()*(b-a);
+
+function quad(c,x1,y1,x2,y2,x3,y3,x4,y4,fill){
+  c.beginPath();
+  c.moveTo(x1,y1); c.lineTo(x2,y2); c.lineTo(x3,y3); c.lineTo(x4,y4);
+  c.closePath(); c.fillStyle = fill; c.fill();
+}
+
+/* ============================================================
+   1. 噪声纹理
+============================================================ */
+const noiseCv = (()=>{
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const c = cv.getContext('2d');
+  const img = c.createImageData(256,256);
+  const d = img.data;
+  for(let i=0;i<d.length;i+=4){
+    const v = Math.random()*255|0;
+    d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+  }
+  c.putImageData(img,0,0);
+  return cv;
+})();
+
+function drawNoise(c,alpha,scale){
+  scale = scale || 1;
+  c.save();
+  c.globalAlpha = alpha;
+  c.globalCompositeOperation = 'lighter';
+  const ox = -Math.random()*256, oy = -Math.random()*256;
+  c.drawImage(noiseCv, 0,0,256,256, ox,oy, (W+512)*scale, (H+512)*scale);
+  c.restore();
+}
+
+/* ============================================================
+   2. 房间绘制（8 个）
+============================================================ */
+function drawCorridor(c,w,h){
+  c.fillStyle='#060608'; c.fillRect(0,0,w,h);
+  const cx=w*0.5, cy=h*0.5, bw=w*0.24, bh=h*0.32;
+  const L=cx-bw/2,R=cx+bw/2,T=cy-bh/2,B=cy+bh/2;
+  quad(c,0,0,L,T,R,T,w,0,'#0a0a0d');
+  quad(c,0,h,L,B,R,B,w,h,'#101013');
+  quad(c,0,0,L,T,L,B,0,h,'#0d0d10');
+  quad(c,w,0,R,T,R,B,w,h,'#0b0b0e');
+  c.fillStyle='#141418'; c.fillRect(L,T,bw,bh);
+  c.fillStyle='#030304'; c.fillRect(cx-bw*0.18,B-bh*0.75,bw*0.36,bh*0.75);
+  c.fillStyle='rgba(120,150,200,0.09)'; c.fillRect(cx-bw*0.18,B-3,bw*0.36,3);
+  c.fillStyle='rgba(190,200,170,0.045)';
+  c.beginPath(); c.moveTo(w*0.42,h*0.02); c.lineTo(w*0.58,h*0.02);
+  c.lineTo(w*0.65,h*0.24); c.lineTo(w*0.35,h*0.24); c.closePath(); c.fill();
+}
+
+function drawRoom101(c,w,h){
+  c.fillStyle='#08080a'; c.fillRect(0,0,w,h);
+  c.fillStyle='#111114'; c.fillRect(0,0,w,h*0.7);
+  c.fillStyle='#0b0b0e'; c.fillRect(0,h*0.7,w,h*0.3);
+  c.fillStyle='#040406'; c.fillRect(w*0.60,h*0.22,w*0.24,h*0.22);
+  c.fillStyle='rgba(130,180,230,0.09)'; c.fillRect(w*0.61,h*0.23,w*0.22,h*0.2);
+  c.fillStyle='rgba(130,180,230,0.03)';
+  c.beginPath(); c.moveTo(w*0.60,h*0.44); c.lineTo(w*0.84,h*0.44);
+  c.lineTo(w*0.92,h*0.66); c.lineTo(w*0.52,h*0.66); c.closePath(); c.fill();
+  c.fillStyle='#15151a'; c.fillRect(w*0.06,h*0.48,w*0.34,h*0.24);
+  c.fillStyle='#1c1c22'; c.fillRect(w*0.06,h*0.48,w*0.34,h*0.06);
+  c.fillStyle='#121216'; c.fillRect(w*0.44,h*0.64,w*0.2,h*0.05);
+  c.fillStyle='#050507'; c.fillRect(w*0.90,h*0.3,w*0.1,h*0.4);
+  c.fillStyle='#1a1a1f'; c.beginPath(); c.arc(w*0.30,h*0.16,w*0.035,0,Math.PI*2); c.fill();
+  c.fillStyle='#2e2e36'; c.beginPath(); c.arc(w*0.30,h*0.16,w*0.026,0,Math.PI*2); c.fill();
+}
+
+function drawRoom102(c,w,h){
+  c.fillStyle='#09090b'; c.fillRect(0,0,w,h);
+  c.fillStyle='#121216'; c.fillRect(0,0,w,h*0.72);
+  c.fillStyle='#0c0c0f'; c.fillRect(0,h*0.72,w,h*0.28);
+  c.fillStyle='#161d27'; c.fillRect(w*0.14,h*0.14,w*0.22,h*0.26);
+  c.strokeStyle='#252530'; c.lineWidth=2;
+  c.beginPath(); c.moveTo(w*0.25,h*0.14); c.lineTo(w*0.25,h*0.40); c.stroke();
+  c.beginPath(); c.moveTo(w*0.14,h*0.27); c.lineTo(w*0.36,h*0.27); c.stroke();
+  c.fillStyle='rgba(110,150,210,0.045)';
+  c.beginPath(); c.moveTo(w*0.14,h*0.40); c.lineTo(w*0.36,h*0.40);
+  c.lineTo(w*0.48,h*0.72); c.lineTo(w*0.04,h*0.72); c.closePath(); c.fill();
+  c.fillStyle='#17171d'; c.fillRect(w*0.42,h*0.44,w*0.42,h*0.34);
+  c.fillStyle='#22222b'; c.fillRect(w*0.44,h*0.40,w*0.12,h*0.07);
+  c.fillStyle='#1e1e26'; c.fillRect(w*0.42,h*0.55,w*0.42,h*0.23);
+  c.fillStyle='#131318'; c.fillRect(w*0.06,h*0.55,w*0.16,h*0.18);
+  c.fillStyle='#1a1a21'; c.fillRect(w*0.09,h*0.42,w*0.10,h*0.13);
+  c.fillStyle='#050507'; c.fillRect(w*0.89,h*0.28,w*0.11,h*0.44);
+}
+
+function drawRoom203(c,w,h){
+  c.fillStyle='#08080b'; c.fillRect(0,0,w,h);
+  c.fillStyle='#111116'; c.fillRect(0,0,w,h*0.7);
+  c.fillStyle='#0b0b0e'; c.fillRect(0,h*0.7,w,h*0.3);
+  c.fillStyle='#181820'; c.fillRect(w*0.30,h*0.42,w*0.44,h*0.32);
+  c.fillStyle='#23232d'; c.fillRect(w*0.32,h*0.38,w*0.12,h*0.07);
+  c.fillStyle='#23232d'; c.fillRect(w*0.58,h*0.38,w*0.12,h*0.07);
+  c.fillStyle='#1e1e27'; c.fillRect(w*0.30,h*0.54,w*0.44,h*0.20);
+  c.fillStyle='#1a1a22'; c.fillRect(w*0.78,h*0.48,w*0.16,h*0.22);
+  c.fillStyle='#242430';
+  for(let i=0;i<5;i++) c.fillRect(w*0.79+i*w*0.032,h*0.48,2,h*0.22);
+  c.fillStyle='#2a2a36'; c.fillRect(w*0.80,h*0.56,w*0.12,h*0.06);
+  c.fillStyle='#050508'; c.fillRect(w*0.05,h*0.28,w*0.12,h*0.44);
+  c.fillStyle='rgba(220,180,120,0.18)';
+  c.beginPath(); c.arc(w*0.86,h*0.44,3,0,Math.PI*2); c.fill();
+  c.fillStyle='rgba(220,180,120,0.04)';
+  c.beginPath(); c.arc(w*0.86,h*0.44,26,0,Math.PI*2); c.fill();
+}
+
+function drawRoom304(c,w,h){
+  c.fillStyle='#09090c'; c.fillRect(0,0,w,h);
+  c.fillStyle='#121217'; c.fillRect(0,0,w,h*0.72);
+  c.fillStyle='#0c0c10'; c.fillRect(0,h*0.72,w,h*0.28);
+  c.fillStyle='#17171f'; c.fillRect(w*0.12,h*0.46,w*0.30,h*0.28);
+  c.fillStyle='#21212b'; c.fillRect(w*0.13,h*0.42,w*0.11,h*0.07);
+  c.fillStyle='#131319'; c.fillRect(w*0.56,h*0.50,w*0.32,h*0.06);
+  c.fillStyle='#0f0f14'; c.fillRect(w*0.58,h*0.56,w*0.03,h*0.18);
+  c.fillStyle='#0f0f14'; c.fillRect(w*0.83,h*0.56,w*0.03,h*0.18);
+  c.fillStyle='rgba(220,200,140,0.22)';
+  c.beginPath(); c.arc(w*0.72,h*0.44,3,0,Math.PI*2); c.fill();
+  c.fillStyle='rgba(220,200,140,0.05)';
+  c.beginPath(); c.arc(w*0.72,h*0.44,30,0,Math.PI*2); c.fill();
+  c.fillStyle='#151c26'; c.fillRect(w*0.62,h*0.14,w*0.24,h*0.24);
+  c.strokeStyle='#252530'; c.lineWidth=2;
+  c.beginPath(); c.moveTo(w*0.74,h*0.14); c.lineTo(w*0.74,h*0.38); c.stroke();
+}
+
+function drawRoom305(c,w,h){
+  c.fillStyle='#08080a'; c.fillRect(0,0,w,h);
+  c.fillStyle='#101015'; c.fillRect(0,0,w,h*0.72);
+  c.fillStyle='#0b0b0e'; c.fillRect(0,h*0.72,w,h*0.28);
+  c.fillStyle='#14141a'; c.fillRect(w*0.06,h*0.52,w*0.18,h*0.22);
+  c.fillStyle='#1c1c24'; c.fillRect(w*0.06,h*0.50,w*0.18,h*0.03);
+  c.fillStyle='#16161e'; c.fillRect(w*0.46,h*0.46,w*0.34,h*0.28);
+  c.fillStyle='#20202a'; c.fillRect(w*0.47,h*0.42,w*0.11,h*0.07);
+  c.fillStyle='#040406'; c.fillRect(w*0.86,h*0.28,w*0.10,h*0.16);
+  c.fillStyle='#040406'; c.fillRect(w*0.88,h*0.50,w*0.12,h*0.24);
+  c.fillStyle='#1a1a20'; c.fillRect(w*0.30,h*0.40,w*0.10,h*0.02);
+  c.fillStyle='#14141a'; c.fillRect(w*0.34,h*0.42,w*0.04,h*0.16);
+}
+
+function drawRoom404(c,w,h){
+  c.fillStyle='#070709'; c.fillRect(0,0,w,h);
+  c.fillStyle='#0e0e12'; c.fillRect(0,0,w,h*0.74);
+  c.fillStyle='#0a0a0d'; c.fillRect(0,h*0.74,w,h*0.26);
+  c.fillStyle='#141418'; c.fillRect(w*0.34,h*0.48,w*0.32,h*0.26);
+  c.fillStyle='#1a1a20'; c.fillRect(w*0.35,h*0.45,w*0.10,h*0.06);
+  c.fillStyle='#111116'; c.fillRect(w*0.72,h*0.30,w*0.18,h*0.44);
+  c.fillStyle='#0a0a0e'; c.fillRect(w*0.80,h*0.30,w*0.01,h*0.44);
+  c.fillStyle='#1e1e26'; c.fillRect(w*0.78,h*0.50,w*0.015,h*0.04);
+  c.fillRect(w*0.82,h*0.50,w*0.015,h*0.04);
+  c.fillStyle='#141b25'; c.fillRect(w*0.08,h*0.16,w*0.20,h*0.24);
+  c.strokeStyle='#232330'; c.lineWidth=2;
+  c.beginPath(); c.moveTo(w*0.18,h*0.16); c.lineTo(w*0.18,h*0.40); c.stroke();
+  c.beginPath(); c.moveTo(w*0.08,h*0.28); c.lineTo(w*0.28,h*0.28); c.stroke();
+  c.strokeStyle='rgba(0,0,0,0.45)'; c.lineWidth=3;
+  c.beginPath(); c.moveTo(w*0.10,h*0.16); c.quadraticCurveTo(w*0.22,h*0.10,w*0.26,h*0.24); c.stroke();
+  c.fillStyle='#040406'; c.fillRect(w*0.02,h*0.30,w*0.10,h*0.44);
+}
+
+function drawBasement(c,w,h){
+  c.fillStyle='#060608'; c.fillRect(0,0,w,h);
+  c.fillStyle='#0f0f13'; c.fillRect(0,0,w,h*0.66);
+  c.fillStyle='#0a0a0d'; c.fillRect(0,h*0.66,w,h*0.34);
+  c.fillStyle='#191920'; c.fillRect(0,h*0.07,w,h*0.045);
+  c.fillRect(0,h*0.16,w*0.70,h*0.028);
+  c.fillStyle='#141419'; c.fillRect(w*0.28,h*0.07,w*0.045,h*0.12);
+  for(let i=0;i<7;i++){
+    c.fillStyle = i%2?'#131318':'#0e0e12';
+    c.fillRect(0,h*0.66-i*7,w*0.20+i*6,7);
+  }
+  c.fillStyle='#17171e'; c.fillRect(w*0.60,h*0.44,w*0.20,h*0.22);
+  c.fillStyle='#111116'; c.fillRect(w*0.52,h*0.56,w*0.14,h*0.12);
+  c.fillStyle='#08080b'; c.fillRect(w*0.62,h*0.46,w*0.16,h*0.02);
+  c.strokeStyle='#1e1e24'; c.lineWidth=1;
+  c.beginPath(); c.moveTo(w*0.42,0); c.lineTo(w*0.42,h*0.15); c.stroke();
+  c.fillStyle='rgba(220,200,140,0.30)';
+  c.beginPath(); c.arc(w*0.42,h*0.17,3,0,Math.PI*2); c.fill();
+  c.fillStyle='rgba(220,200,140,0.04)';
+  c.beginPath(); c.arc(w*0.42,h*0.17,30,0,Math.PI*2); c.fill();
+}
+
+/* 房间定义 */
+const ROOMS = [
+  {name:'走廊 · 1F',    draw:drawCorridor,  spot:{x:0.50,y:0.55,s:0.85}},
+  {name:'101 · 老太太家',draw:drawRoom101,  spot:{x:0.35,y:0.62,s:0.8}},
+  {name:'102 · 独居女人',draw:drawRoom102,  spot:{x:0.58,y:0.58,s:0.9}},
+  {name:'203 · 年轻夫妇',draw:drawRoom203,  spot:{x:0.60,y:0.60,s:0.8}},
+  {name:'304 · 空置中',  draw:drawRoom304,  spot:{x:0.40,y:0.62,s:0.85}},
+  {name:'305 · 夜班男人',draw:drawRoom305,  spot:{x:0.55,y:0.58,s:0.8}},
+  {name:'404 · 长期空置',draw:drawRoom404,  spot:{x:0.48,y:0.56,s:0.95}},
+  {name:'地下室 · B1',   draw:drawBasement, spot:{x:0.55,y:0.60,s:0.85}},
+];
+
+const roomCvs = ROOMS.map(r=>{
+  const cv = document.createElement('canvas');
+  cv.width=W; cv.height=H;
+  r.draw(cv.getContext('2d'),W,H);
+  return cv;
+});
+
+/* ============================================================
+   3. 动态元素
+============================================================ */
+function drawFigure(c, x, y, s, alpha, mode){
+  c.save();
+  c.globalAlpha = alpha;
+  c.fillStyle = '#000';
+  if(mode === 'sit'){
+    c.beginPath(); c.arc(x, y-24*s, 8*s, 0, Math.PI*2); c.fill();
+    c.beginPath();
+    c.moveTo(x-9*s,y-14*s); c.lineTo(x+9*s,y-14*s);
+    c.lineTo(x+11*s,y+22*s); c.lineTo(x-11*s,y+22*s);
+    c.closePath(); c.fill();
+    c.fillRect(x-16*s,y+18*s,32*s,6*s);
+  } else {
+    c.beginPath(); c.arc(x, y-32*s, 8.5*s, 0, Math.PI*2); c.fill();
+    c.beginPath();
+    c.moveTo(x-9*s,y-22*s); c.lineTo(x+9*s,y-22*s);
+    c.lineTo(x+13*s,y+40*s); c.lineTo(x-13*s,y+40*s);
+    c.closePath(); c.fill();
+    c.fillRect(x-16*s,y-18*s,5.5*s,34*s);
+    c.fillRect(x+10.5*s,y-18*s,5.5*s,34*s);
+  }
+  c.restore();
+}
+
+function drawGhostFace(c, t){
+  c.save();
+  c.fillStyle = '#060606';
+  c.fillRect(0,0,W,H);
+  const jx = Math.sin(t*0.009)*4;
+  const jy = Math.cos(t*0.0071)*3;
+  const cx = W/2 + jx, cy = H/2 + jy;
+  c.fillStyle = '#c9c1b2';
+  c.beginPath();
+  c.ellipse(cx, cy, W*0.20, H*0.42, Math.sin(t*0.003)*0.04, 0, Math.PI*2);
+  c.fill();
+  const g = c.createRadialGradient(cx,cy,W*0.04, cx,cy,W*0.34);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(0.6,'rgba(0,0,0,0.35)');
+  g.addColorStop(1,'rgba(0,0,0,0.97)');
+  c.fillStyle=g; c.fillRect(0,0,W,H);
+  c.fillStyle='#000';
+  c.beginPath(); c.ellipse(cx-W*0.075, cy-H*0.09, W*0.042, H*0.10,0,0,Math.PI*2); c.fill();
+  c.beginPath(); c.ellipse(cx+W*0.075, cy-H*0.09, W*0.042, H*0.10,0,0,Math.PI*2); c.fill();
+  c.fillStyle='rgba(200,28,18,0.9)';
+  c.beginPath(); c.arc(cx-W*0.075, cy-H*0.09, 2.4,0,Math.PI*2); c.fill();
+  c.beginPath(); c.arc(cx+W*0.075, cy-H*0.09, 2.4,0,Math.PI*2); c.fill();
+  c.fillStyle='#000';
+  c.beginPath(); c.ellipse(cx, cy+H*0.20, W*0.048, H*0.12,0,0,Math.PI*2); c.fill();
+  drawNoise(c, 0.18);
+  c.restore();
+}
+
+/* ============================================================
+   4. 音频引擎（全部 try-catch 保护）
+============================================================ */
+const audio = {
+  ctx:null, master:null, noiseBuf:null, ready:false,
+  humGain:null, _breath:null, _heart:null, _heartTimer:null,
+
+  init(){
+    if(this.ready) return;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.8;
+      this.master.connect(this.ctx.destination);
+
+      const len = this.ctx.sampleRate*2;
+      const buf = this.ctx.createBuffer(1,len,this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+      this.noiseBuf = buf;
+
+      this.startHum();
+      this.ready = true;
+    } catch(e){
+      console.warn('音频初始化失败，游戏将在无声模式下运行', e);
+      this.ready = false;
+    }
+  },
+
+  startHum(){
+    const c=this.ctx;
+    const g=c.createGain(); g.gain.value=0.05; g.connect(this.master);
+    this.humGain = g;
+    const lp=c.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=210; lp.connect(g);
+    [48,48.7,97.2].forEach((f,i)=>{
+      const o=c.createOscillator(); o.type='sine'; o.frequency.value=f;
+      const og=c.createGain(); og.gain.value = i===0?1:0.32;
+      o.connect(og); og.connect(lp); o.start();
+    });
+    const lfo=c.createOscillator(); lfo.frequency.value=0.06;
+    const lg=c.createGain(); lg.gain.value=0.018;
+    lfo.connect(lg); lg.connect(g.gain); lfo.start();
+  },
+
+  setHumLevel(v){
+    if(!this.ready || !this.humGain) return;
+    try { this.humGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.4); } catch(e){}
+  },
+
+  noise(dur,vol,freq,type){
+    if(!this.ready) return;
+    try {
+      const c=this.ctx, t=c.currentTime;
+      const src=c.createBufferSource(); src.buffer=this.noiseBuf; src.loop=true;
+      const f=c.createBiquadFilter(); f.type=type||'bandpass'; f.frequency.value=freq||2500; f.Q.value=0.9;
+      const g=c.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(vol||0.15, t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      src.connect(f); f.connect(g); g.connect(this.master);
+      src.start(t); src.stop(t+dur+0.06);
+    } catch(e){}
+  },
+
+  click(){
+    if(!this.ready) return;
+    try {
+      this.noise(0.06,0.12,3600,'highpass');
+      const c=this.ctx,t=c.currentTime;
+      const o=c.createOscillator(); o.type='square'; o.frequency.value=180;
+      const g=c.createGain(); g.gain.setValueAtTime(0.05,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.05);
+      o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.06);
+    } catch(e){}
+  },
+
+  thump(){
+    if(!this.ready) return;
+    try {
+      const c=this.ctx,t=c.currentTime;
+      const o=c.createOscillator(); o.type='sine';
+      o.frequency.setValueAtTime(110,t);
+      o.frequency.exponentialRampToValueAtTime(26,t+0.4);
+      const g=c.createGain();
+      g.gain.setValueAtTime(0.6,t);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.48);
+      o.connect(g); g.connect(this.master); o.start(t); o.stop(t+0.5);
+      this.noise(0.2,0.06,180,'lowpass');
+    } catch(e){}
+  },
+
+  screech(){
+    if(!this.ready) return;
+    try {
+      const c=this.ctx,t=c.currentTime;
+      const g=c.createGain();
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.16,t+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+      g.connect(this.master);
+      for(let i=0;i<3;i++){
+        const o=c.createOscillator(); o.type='sawtooth';
+        o.frequency.setValueAtTime(1100+Math.random()*1800,t);
+        o.frequency.exponentialRampToValueAtTime(100+Math.random()*90,t+0.5);
+        o.connect(g); o.start(t); o.stop(t+0.65);
+      }
+      this.noise(0.4,0.11,3400,'highpass');
+    } catch(e){}
+  },
+
+  whisper(){ if(!this.ready) return; this.noise(1.5,0.05,850,'bandpass'); },
+
+  breath(on){
+    if(!this.ready) return;
+    try {
+      if(on && !this._breath){
+        const c=this.ctx;
+        const src=c.createBufferSource(); src.buffer=this.noiseBuf; src.loop=true;
+        const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=520; f.Q.value=1.4;
+        const g=c.createGain(); g.gain.value=0.0;
+        src.connect(f); f.connect(g); g.connect(this.master);
+        src.start();
+        const lfo=c.createOscillator(); lfo.frequency.value=0.28;
+        const lg=c.createGain(); lg.gain.value=0.012;
+        lfo.connect(lg); lg.connect(g.gain); lfo.start();
+        this._breath={src,g,lfo};
+      } else if(!on && this._breath){
+        try{ this._breath.src.stop(); this._breath.lfo.stop(); }catch(e){}
+        this._breath=null;
+      }
+    } catch(e){}
+  },
+
+  heartbeat(on){
+    if(!this.ready) return;
+    try {
+      if(on && !this._heart){
+        const self=this;
+        const tick=()=>{
+          if(!self._heart) return;
+          try {
+            const c=self.ctx,t=c.currentTime;
+            [0,0.16].forEach((off,idx)=>{
+              const o=c.createOscillator(); o.type='sine';
+              o.frequency.setValueAtTime(idx?52:62,t+off);
+              o.frequency.exponentialRampToValueAtTime(30,t+off+0.12);
+              const g=c.createGain();
+              g.gain.setValueAtTime(0.0001,t+off);
+              g.gain.exponentialRampToValueAtTime(idx?0.10:0.16,t+off+0.02);
+              g.gain.exponentialRampToValueAtTime(0.0001,t+off+0.2);
+              o.connect(g); g.connect(self.master); o.start(t+off); o.stop(t+off+0.24);
+            });
+          } catch(e){}
+          self._heartTimer = setTimeout(tick, 1000);
+        };
+        this._heart = true;
+        tick();
+      } else if(!on && this._heart){
+        this._heart = false;
+        clearTimeout(this._heartTimer);
+      }
+    } catch(e){}
+  }
+};
+
+/* ============================================================
+   5. 游戏状态
+============================================================ */
+const game = {
+  mode:'boot',
+  night:1,
+  nightTime:0,
+  nightDur:0,
+  currentCam:0,
+  lookTime:0,
+  stareCount:0,
+  scareCount:0,
+  lastScareAt:-99999,
+  transitionUntil:0,
+  clockGlitch:false,
+  anomalies:{},
+  scriptIndex:0,
+  nightEnded:false,
+  canSwitch:true,
+  lastFrame:0,
+  _face404Armed:false,
+  _face404At:0,
+  _smile305:false,
+  _smileUntil:0
+};
+
+const hudCam = document.getElementById('hud-cam');
+const hudRoom = document.getElementById('hud-room');
+const hudClock = document.getElementById('hud-clock');
+
+const camBar = document.getElementById('cam-bar');
+ROOMS.forEach((r,i)=>{
+  const b = document.createElement('button');
+  b.className = 'cam-btn';
+  b.innerHTML = `<span class="num">CAM ${String(i+1).padStart(2,'0')}</span>${r.name}`;
+  b.addEventListener('click', ()=>switchCam(i));
+  camBar.appendChild(b);
+});
+const camBtns = [...camBar.children];
+
+function updateHud(){
+  hudCam.textContent = 'CAM ' + String(game.currentCam+1).padStart(2,'0');
+  hudRoom.textContent = ROOMS[game.currentCam].name;
+  camBtns.forEach((b,i)=>b.classList.toggle('active', i===game.currentCam));
+}
+
+function switchCam(i){
+  if(game.mode!=='playing' || !game.canSwitch) return;
+  if(i===game.currentCam) return;
+  game.currentCam = i;
+  game.lookTime = 0;
+  game.transitionUntil = performance.now() + (game.night===5?520:280);
+  audio.click();
+  updateHud();
+}
+
+/* ============================================================
+   6. 异常 / 惊吓
+============================================================ */
+function setAnomaly(cam, type, opts){
+  game.anomalies[cam] = {
+    type, opts: opts||{},
+    start: performance.now()
+  };
+  if(type==='figure' && Math.random()<0.5) audio.whisper();
+}
+
+function clearAnomaly(cam){ delete game.anomalies[cam]; }
+
+function flashScreen(op){
+  flashEl.style.transition='none';
+  flashEl.style.opacity = op;
+  requestAnimationFrame(()=>{
+    flashEl.style.transition='opacity .2s ease-out';
+    flashEl.style.opacity = 0;
+  });
+}
+
+function shakeScreen(){
+  stage.classList.add('shake');
+  setTimeout(()=>stage.classList.remove('shake'), 440);
+}
+
+function doScare(level){
+  game.scareCount++;
+  game.lastScareAt = performance.now();
+  if(level >= 2){
+    audio.screech();
+    flashScreen(0.75);
+    shakeScreen();
+  } else {
+    audio.noise(0.3,0.16,4200,'highpass');
+    flashScreen(0.3);
+  }
+}
+
+function triggerStareScare(){
+  const cam = game.currentCam;
+  clearAnomaly(cam);
+  doScare(2);
+  game.stareCount++;
+  game.lookTime = 0;
+  audio.setHumLevel(0.05);
+  audio.breath(false);
+  audio.heartbeat(false);
+  game.transitionUntil = performance.now() + 700;
+
+  if(game.night === 5 && game.stareCount >= 8){
+    setTimeout(()=>{ if(game.mode==='playing') endNight(true); }, 900);
+  }
+}
+
+/* ============================================================
+   7. 夜脚本
+============================================================ */
+const NIGHTS = [
+  {
+    duration: 72000, clockStart: 0,
+    script: [
+      {at:12000, run:()=>{ setAnomaly(4,'clockGlitch'); }},
+      {at:38000, run:()=>{ game.transitionUntil = performance.now()+220; audio.noise(0.2,0.1,3000); }},
+      {at:52000, run:()=>{ setAnomaly(1,'figure',{fade:true, faint:true, life:5200}); }},
+    ],
+    log:
+`第一夜。
+
+队长把一串钥匙拍在桌上，说这活儿就一个字：稳。
+八块屏幕，八个房间。每小时巡查一次，在本子上画个勾。
+
+我看了一圈，画面里安安静静的。
+101 的老太太已经睡了，203 的灯还亮着。
+楼下传来送外卖的电动车声，一切正常得让人犯困。
+
+凌晨一点多，304 的时间戳跳了一下。
+不是往前走，是往回退了两秒。
+
+我揉了揉眼睛，它又正常了。
+
+大概是线路老化吧。老楼了。`
+  },
+  {
+    duration: 82000, clockStart: 0,
+    script: [
+      {at:16000, run:()=>{ setAnomaly(2,'figure',{stare:true, life:99999}); }},
+      {at:46000, run:()=>{ audio.noise(1.2,0.07,700); audio.whisper(); }},
+    ],
+    log:
+`第二夜。
+
+凌晨三点，102。
+
+她一个人住，作息规律得像钟表。晚上十点关灯，早上六点起床。
+但今晚，她的床尾站着一个人。
+
+一动不动。黑色的，看不清脸。
+就站在那儿。
+
+我盯着看了很久。它一直在。
+直到我受不了，抓起手电冲上二楼，砸她的门。
+
+她睡得好好的，穿着睡衣，问我怎么了。
+屋里没有人。
+
+回到监控室，屏幕干干净净，连噪点都少了。
+只有我的巡查本上，102 那一格，勾画歪了。`
+  },
+  {
+    duration: 88000, clockStart: 0,
+    script: [
+      {at:10000, run:()=>{ setAnomaly(1,'figure',{fade:true, life:99999}); }},
+      {at:22000, run:()=>{ setAnomaly(3,'figure',{fade:true, life:99999}); }},
+      {at:36000, run:()=>{ setAnomaly(5,'figure',{fade:true, life:99999}); }},
+      {at:50000, run:()=>{ audio.noise(0.8,0.08,500); audio.whisper(); }},
+    ],
+    log:
+`第三夜。
+
+周老头在值班本最后一页写了句话：
+「别盯着看太久。」
+
+我问队长周老头是谁。他说是上一个夜班保安，干了十一年。
+突然辞职，不干了。
+
+今晚 404 的屏幕上，出现了东西。
+我看了两秒，它就贴到了镜头上。
+
+我这辈子没跑那么快过。
+
+队长打电话问我在哪，我说我辞职。
+他沉默了一会儿，说：周老头也这么说。`
+  },
+  {
+    duration: 94000, clockStart: 0,
+    script: [
+      {at:8000,  run:()=>{ game.transitionUntil = performance.now()+600; audio.noise(0.6,0.2,2600); }},
+      {at:20000, run:()=>{ setAnomaly(0,'figure',{fade:true, life:99999}); setAnomaly(2,'figure',{fade:true, life:99999}); }},
+      {at:24000, run:()=>{ setAnomaly(3,'figure',{fade:true, life:99999}); setAnomaly(5,'figure',{fade:true, life:99999}); }},
+      {at:34000, run:()=>{ setAnomaly(6,'figure',{fade:true, life:99999}); }},
+      {at:52000, run:()=>{ setAnomaly(7,'figure',{fade:true, life:99999}); audio.heartbeat(true); }},
+      {at:68000, run:()=>{ audio.heartbeat(false); }},
+    ],
+    log:
+`第四夜。
+
+我开始记时间了。
+每次它出现，我都记下来。
+
+我发现一个规律：
+我盯着看的时候，它才会动。
+我不看，它就只是一个影子。
+
+305 那个男人，今晚下班回来。
+他换鞋，进屋，脱外套。
+然后回头，对着摄像头笑了一下。
+
+我从没见过他笑。
+准确地说，我从没见过有人那样笑。
+嘴角咧得太开，牙齿露得太多。
+
+像是有人在练习怎么做一个人的表情。`
+  },
+  {
+    duration: 100000, clockStart: 0,
+    script: [
+      {at:3000, run:()=>{
+        audio.thump(); shakeScreen(); flashScreen(0.25);
+        game.canSwitch = false;
+        setTimeout(()=>{ game.canSwitch = true; }, 1400);
+      }},
+      {at:14000, run:()=>{
+        for(let i=0;i<8;i++) setAnomaly(i,'figure',{fade:true, life:99999, face:true});
+        audio.heartbeat(true);
+      }},
+      {at:38000, run:()=>{ audio.whisper(); audio.noise(1.5,0.07,600); }},
+      {at:62000, run:()=>{ audio.heartbeat(false); game.transitionUntil = performance.now()+500; }},
+    ],
+    log:
+`第五夜。
+
+我知道今晚不一样。
+
+门自己关上了。手机没信号。
+八块屏幕里，每个房间都站着人。
+它们全都面朝镜头。
+
+我把周老头的硬盘翻了出来。幸好我没扔。
+里面只有八段视频，每段一分多钟。
+八段视频，八张脸。
+
+最后一段是监控室。
+
+画面里，一个保安坐在椅子上，背对着镜头。
+他慢慢地，慢慢地转过头来。
+
+那张脸是我的。`
+  }
+];
+
+/* ============================================================
+   8. 夜晚开始 / 结束
+============================================================ */
+function startNight(n){
+  game.night = n;
+  game.nightTime = 0;
+  game.currentCam = 0;
+  game.lookTime = 0;
+  game.transitionUntil = 0;
+  game.clockGlitch = false;
+  game.anomalies = {};
+  game.scriptIndex = 0;
+  game.nightEnded = false;
+  game.canSwitch = true;
+  game.nightDur = NIGHTS[n-1].duration;
+  game.clockBase = NIGHTS[n-1].clockStart;
+  game.mode = 'playing';
+  game.lastFrame = 0;
+  game._face404Armed = false;
+  game._face404At = 0;
+  game._smile305 = false;
+  game._smileUntil = 0;
+
+  audio.heartbeat(false);
+  audio.breath(false);
+  audio.setHumLevel(0.05);
+
+  updateHud();
+  stage.classList.add('on');
+
+  audio.noise(0.35,0.12,2200);
+  game.transitionUntil = performance.now() + 700;
+
+  if(n===5){ setTimeout(()=>{ audio.thump(); shakeScreen(); }, 2600); }
+}
+
+function endNight(forceBad){
+  if(game.nightEnded) return;
+  game.nightEnded = true;
+  game.mode = 'log';
+  audio.heartbeat(false);
+  audio.breath(false);
+  audio.setHumLevel(0.05);
+
+  const bad = forceBad || (game.night===5 && game.stareCount >= 6);
+
+  if(game.night === 5){
+    showEnding(!bad);
+    return;
+  }
+
+  showLog(NIGHTS[game.night-1].log, ()=> startNight(game.night + 1));
+}
+
+/* ============================================================
+   9. 日志界面
+============================================================ */
+const logLayer = document.getElementById('log-layer');
+const logText = document.getElementById('log-text');
+const logHint = document.getElementById('log-hint');
+let typingTimer = null;
+let typingFull = '';
+let typingDone = false;
+let typingCallback = null;
+
+function showLog(text, cb){
+  game.mode = 'log';
+  typingFull = text;
+  typingDone = false;
+  typingCallback = cb;
+  logText.innerHTML = '';
+  logLayer.classList.add('on');
+  logHint.textContent = '[ 点击跳过 ]';
+
+  let i = 0;
+  clearInterval(typingTimer);
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+  logText.appendChild(cursor);
+
+  const speed = typingFull.length > 250 ? 14 : 20;
+
+  typingTimer = setInterval(()=>{
+    if(i >= typingFull.length){
+      clearInterval(typingTimer);
+      typingDone = true;
+      cursor.remove();
+      logHint.textContent = '[ 点击继续 ]';
+      return;
+    }
+    const ch = typingFull[i++];
+    cursor.insertAdjacentText('beforebegin', ch);
+    if(ch !== '\n' && Math.random()<0.3) audio.noise(0.012,0.01,5200,'highpass');
+  }, speed);
+}
+
+function advanceLog(){
+  if(game.mode !== 'log') return;
+  if(!typingDone){
+    clearInterval(typingTimer);
+    logText.textContent = typingFull;
+    typingDone = true;
+    logHint.textContent = '[ 点击继续 ]';
+    return;
+  }
+  logLayer.classList.remove('on');
+  const cb = typingCallback;
+  typingCallback = null;
+  if(cb) cb();
+}
+
+logLayer.addEventListener('click', advanceLog);
+
+/* ============================================================
+   10. 结局
+============================================================ */
+const endLayer = document.getElementById('end-layer');
+const endTitle = document.getElementById('end-title');
+const endText = document.getElementById('end-text');
+
+const ENDINGS = {
+  good:
+`天亮了。
+
+屏幕里的影子一个接一个地散了，像雾一样。
+门自己开了，走廊里有送牛奶的脚步声。
+
+我在值班本上写了最后一页：
+「我不干了。」
+
+走出楼门的时候，天是灰蓝色的。
+我把钥匙交给队长，他问我为什么。
+我没说。
+
+一周后我路过那栋楼，新来了个年轻保安，
+歪在椅子上打盹，八块屏幕静静地亮着。
+
+我站在街对面看了他很久。
+最后还是掏出手机，发了条匿名短信。
+
+只有一句话：
+「别盯着看太久。」`,
+  bad:
+`屏幕黑了。
+
+然后我听见自己的呼吸声，
+从八块屏幕里同时传来。
+
+我回头看了看那把椅子。
+椅子上坐着一个人。
+
+它穿着和我一样的制服，
+慢慢地，慢慢地转过头来。
+
+它没有脸。
+
+监控室的门锁上了。
+明天的值班本上，会多出一个名字。
+
+那个名字，是我。`
+};
+
+function showEnding(good){
+  game.mode = 'ending';
+  stage.classList.remove('on');
+  endLayer.classList.add('on');
+  endTitle.textContent = good ? '天 亮 了' : '信 号 丢 失';
+  endText.textContent = good ? ENDINGS.good : ENDINGS.bad;
+  if(!good){ audio.noise(2.2,0.1,300); audio.thump(); }
+}
+
+document.getElementById('restartBtn').addEventListener('click', ()=>{
+  endLayer.classList.remove('on');
+  game.stareCount = 0;
+  game.scareCount = 0;
+  startNight(1);
+});
+
+/* ============================================================
+   11. 夜脚本执行
+============================================================ */
+function runScript(){
+  const sc = NIGHTS[game.night-1].script;
+  while(game.scriptIndex < sc.length && game.nightTime >= sc[game.scriptIndex].at){
+    try{ sc[game.scriptIndex].run(); }catch(e){ console.warn(e); }
+    game.scriptIndex++;
+  }
+}
+
+/* ============================================================
+   12. 异常 & 注视机制
+============================================================ */
+function updateAnomalies(dt, now){
+  const cam = game.currentCam;
+  const an = game.anomalies[cam];
+
+  game.clockGlitch = !!game.anomalies[4] && game.anomalies[4].type==='clockGlitch';
+
+  if(an && (an.type==='figure' || an.type==='face')){
+    game.lookTime += dt;
+  } else {
+    game.lookTime = Math.max(0, game.lookTime - dt*2.4);
+  }
+
+  let threshold = 18000;
+  if(game.night===3) threshold = 15000;
+  if(game.night===4) threshold = 12000;
+  if(game.night===5) threshold = 8000;
+  if(an && an.opts && an.opts.faint) threshold = 22000;
+
+  const ratio = game.lookTime / threshold;
+
+  if(ratio > 0.45 && an){
+    audio.breath(true);
+    audio.setHumLevel(0.07 + ratio*0.05);
+    if(ratio > 0.7) audio.heartbeat(true);
+  } else {
+    audio.breath(false);
+    audio.heartbeat(false);
+    audio.setHumLevel(0.05);
+  }
+
+  if(ratio >= 1 && an && an.type==='figure'){
+    if(now - game.lastScareAt > 9000){
+      triggerStareScare();
+    } else {
+      game.lookTime = 0;
+    }
+  }
+
+  for(const k in game.anomalies){
+    const a = game.anomalies[k];
+    if(a.opts && a.opts.life && a.opts.life < 99999){
+      if(now - a.start > a.opts.life) delete game.anomalies[k];
+    }
+  }
+
+  // 404 鬼脸突袭
+  if((game.night===3 || game.night===4) && cam===6 && !game._face404Armed){
+    game._face404Armed = true;
+    game._face404At = now + rand(1400, 3600);
+  }
+  if(game._face404Armed && now > game._face404At && cam===6){
+    game._face404Armed = false;
+    clearAnomaly(6);
+    doScare(2);
+    game.transitionUntil = performance.now()+900;
+  }
+
+  // 305 回头笑（第四夜）
+  if(game.night===4 && cam===5 && !game._smile305 && game.nightTime > 26000 && game.nightTime < 70000){
+    game._smile305 = true;
+    game._smileUntil = now + 2600;
+    audio.noise(0.5,0.06,900);
+  }
+}
+
+/* ============================================================
+   13. 渲染
+============================================================ */
+function render(now){
+  if(now < game.transitionUntil){
+    ctx.save();
+    try {
+      const pat = ctx.createPattern(noiseCv,'repeat');
+      ctx.fillStyle = pat || '#111';
+    } catch(e){ ctx.fillStyle = '#111'; }
+    ctx.translate(-Math.random()*256, -Math.random()*256);
+    ctx.fillRect(0,0,W+256,H+256);
+    ctx.restore();
+    const g = ctx.createRadialGradient(W/2,H/2,W*0.2,W/2,H/2,W*0.7);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(1,'rgba(0,0,0,0.8)');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    return;
+  }
+
+  const cam = game.currentCam;
+  const an = game.anomalies[cam];
+  const t = now;
+
+  ctx.save();
+  const driftX = Math.sin(t*0.0009)*2.2;
+  const driftY = Math.cos(t*0.0011)*1.4;
+  ctx.translate(driftX, driftY);
+
+  ctx.drawImage(roomCvs[cam], 0, 0);
+
+  if(an){
+    if(an.type === 'figure'){
+      const spot = ROOMS[cam].spot;
+      const px = spot.x * W, py = spot.y * H;
+      const baseS = spot.s;
+      const ratio = clamp(game.lookTime / 12000, 0, 1);
+      const grow = 1 + ratio * 0.45;
+      const sx = px + (W/2 - px) * ratio * 0.18;
+      const sy = py + (H*0.95 - py) * ratio * 0.14;
+      const life = an.opts.life && an.opts.life < 99999
+        ? 1 - clamp((now - an.start) / an.opts.life, 0, 1) : 1;
+      let alpha = an.opts.faint ? 0.4 : 0.85;
+      alpha *= life;
+      if(an.opts.fade){
+        const age = now - an.start;
+        alpha *= clamp(age/1200, 0, 1);
+      }
+      if(an.opts.face) alpha = 0.92;
+      drawFigure(ctx, sx, sy, baseS*grow, alpha, an.opts.sit?'sit':'stand');
+      if(ratio > 0.8){
+        ctx.save();
+        ctx.globalAlpha = (ratio-0.8)*0.6;
+        drawGhostFace(ctx, t);
+        ctx.restore();
+      }
+    }
+    if(an.type === 'clockGlitch'){
+      if(Math.random()<0.06){
+        ctx.save();
+        ctx.globalAlpha=0.25;
+        ctx.drawImage(roomCvs[cam], 0, H*0.3+Math.random()*H*0.3, W, 6, rand(-8,8), H*0.3+Math.random()*H*0.3, W, 6);
+        ctx.restore();
+      }
+    }
+  }
+
+  if(cam===5 && game._smile305 && now < game._smileUntil){
+    const spot = ROOMS[5].spot;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle='#000';
+    const x = spot.x*W, y = spot.y*H, s = spot.s;
+    ctx.save();
+    ctx.translate(x, y-30*s);
+    ctx.rotate(0.18);
+    ctx.beginPath(); ctx.arc(0,0,8.5*s,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(200,210,200,0.85)';
+    ctx.beginPath();
+    ctx.ellipse(1.5*s, 3*s, 4.2*s, 1.6*s, 0.1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.moveTo(x-9*s,y-22*s); ctx.lineTo(x+9*s,y-22*s);
+    ctx.lineTo(x+13*s,y+40*s); ctx.lineTo(x-13*s,y+40*s);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  let noiseAlpha = 0.055;
+  if(an && game.lookTime > 6000) noiseAlpha += 0.04;
+  if(an && game.lookTime > 11000) noiseAlpha += 0.05;
+  if(game.night >= 4) noiseAlpha += 0.015;
+  drawNoise(ctx, noiseAlpha);
+
+  if(an && game.lookTime > 7000){
+    const p = clamp((game.lookTime-7000)/8000, 0, 1);
+    const pulse = 0.35 + 0.25*Math.sin(t*0.008);
+    const g = ctx.createRadialGradient(W/2,H/2,W*0.28,W/2,H/2,W*0.72);
+    g.addColorStop(0,'rgba(0,0,0,0)');
+    g.addColorStop(1,`rgba(80,10,10,${p*pulse})`);
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  }
+}
+
+/* ============================================================
+   14. 时钟
+============================================================ */
+let lastClockTick = 0;
+function updateClock(now){
+  if(now - lastClockTick < 900) return;
+  lastClockTick = now;
+  const prog = clamp(game.nightTime / game.nightDur, 0, 1);
+  let total = Math.floor(prog * 6 * 3600);
+  if(game.clockGlitch && game.currentCam===4){
+    total = Math.max(0, total - 2);
+  }
+  const hh = String(Math.floor(total/3600)%24).padStart(2,'0');
+  const mm = String(Math.floor(total/60)%60).padStart(2,'0');
+  const ss = String(total%60).padStart(2,'0');
+  hudClock.textContent = `${hh}:${mm}:${ss}`;
+}
+
+/* ============================================================
+   15. 主循环（带防护，防止一处错误卡死游戏）
+============================================================ */
+function loop(t){
+  requestAnimationFrame(loop);
+
+  if(game.mode !== 'playing'){
+    game.lastFrame = t;
+    return;
+  }
+
+  try {
+    const dt = Math.min(80, t - (game.lastFrame||t));
+    game.lastFrame = t;
+    game.nightTime += dt;
+
+    runScript();
+    updateAnomalies(dt, t);
+    render(t);
+    updateClock(t);
+
+    if(game.nightTime >= game.nightDur && !game.nightEnded){
+      endNight();
+    }
+  } catch(e){
+    console.error('[LOOP]', e);
+  }
+}
+
+/* ============================================================
+   16. 启动
+============================================================ */
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  const boot = document.getElementById('boot');
+  boot.classList.add('hide');
+  setTimeout(()=>{ if(boot.parentNode) boot.remove(); }, 1000);
+
+  // 关键修复：音频初始化失败不能阻塞游戏流程
+  try { audio.init(); } catch(e){ console.warn('audio init failed:', e); }
+
+  game.mode = 'log';
+
+  setTimeout(()=>{
+    try {
+      showLog(
+`这栋楼有八户人家。
+一楼两户，二楼三户，三楼两户，还有一个地下室。
+
+监控室的墙上挂着八块屏幕。
+白天它们没什么用。
+晚上，它们是我唯一的伴儿。
+
+上夜班的第一天，队长说：
+「记住，巡查本上的勾，是给自己看的。」
+
+我没听懂。
+现在我大概懂了。`,
+        ()=> startNight(1)
+      );
+    } catch(e){
+      console.error('showLog failed:', e);
+      startNight(1);
+    }
+  }, 400);
+});
+
+/* 键盘 */
+window.addEventListener('keydown', (e)=>{
+  if(game.mode === 'log'){
+    if(e.key === ' ' || e.key === 'Enter' || e.key === 'Escape'){
+      e.preventDefault();
+      advanceLog();
+      return;
+    }
+  }
+  if(game.mode !== 'playing') return;
+  const n = parseInt(e.key,10);
+  if(n>=1 && n<=8) switchCam(n-1);
+});
+
+document.addEventListener('contextmenu', e=>e.preventDefault());
+
+/* 启动循环 */
+updateHud();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
